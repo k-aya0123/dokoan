@@ -1,0 +1,275 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アンパンマン列車なう - 外部データ連携版</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #map { height: 65vh; width: 100%; border-radius: 12px; }
+        .train-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 2px solid #ff6b6b;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 20px;
+            z-index: 1000 !important;
+        }
+        .node-icon {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #ccc;
+            border-radius: 2px;
+            text-align: center;
+            font-size: 8px;
+            padding: 0px 1px;
+            white-space: nowrap;
+            color: #666;
+        }
+        .station-label {
+            font-weight: bold;
+            color: #333;
+            border-color: #999;
+            background: rgba(255, 255, 255, 1);
+        }
+    </style>
+</head>
+<body class="bg-orange-50 font-sans text-gray-800">
+
+    <header class="bg-red-500 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <span>🚂</span> アンパンマン列車なう (外部データ連携版)
+            </h1>
+            <div class="flex items-center gap-4">
+                <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100">座標を書き出し</button>
+                <div id="current-clock" class="text-lg font-mono bg-red-600 px-3 py-1 rounded">00:00:00</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 space-y-4">
+        <div class="bg-white p-2 rounded-xl shadow-md relative">
+            <div id="map"></div>
+            <div class="absolute top-4 right-4 z-[1000] bg-white p-2 rounded shadow text-xs opacity-95">
+                <p>📍 特急停車駅（太枠）と通過駅を表示しています</p>
+                <p>📍 線路をドラッグして微調整可能です</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="train-list">
+            <div class="col-span-full text-center py-10 text-gray-400 italic">時刻表データを読み込み中...</div>
+        </div>
+
+        <div class="bg-white border-l-4 border-red-400 p-4 text-xs text-gray-600 shadow-sm">
+            <p class="font-bold mb-1">データ管理について:</p>
+            <p>時刻表データは非同期で読み込まれます。実際の運用では <code>fetch('schedule.json')</code> などのパスに置き換えることで、外部JSONファイルから管理できます。</p>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // --- 座標データ定義 ---
+        let POINTS = {
+            // 岡山・瀬戸大橋線
+            "岡山": [34.6662, 133.9185], "大元": [34.6493, 133.9067], "備前西市": [34.6294, 133.8943], "茶屋町": [34.5579, 133.8208], "児島": [34.4646, 133.8184], "瀬戸大橋中間": [34.3852, 133.8277],
+            // 予讃線（東側）
+            "高松": [34.3503, 134.0465], "香西": [34.3411, 134.0150], "端岡": [34.3168, 133.9610], "坂出": [34.3135, 133.8580], "宇多津": [34.3116, 133.8202], "丸亀": [34.3013, 133.7941], "讃岐塩屋": [34.2930, 133.7780], "多度津": [34.2758, 133.7601],
+            // 予讃線（西側）
+            "海岸寺": [34.2562, 133.7230], "津島ノ宮": [34.2410, 133.7160], "詫間": [34.2251, 133.7145], "みの": [34.2050, 133.7080], "高瀬": [34.1873, 133.7027], "比地大": [34.1680, 133.6890], "本山": [34.1480, 133.6780], "観音寺": [34.1293, 133.6534], "豊浜": [34.0840, 133.6420], "箕浦": [34.0530, 133.6180], "川之江": [34.0152, 133.5786], "伊予三島": [33.9806, 133.5434], "伊予寒川": [33.9650, 133.5000], "赤星": [33.9600, 133.4700], "伊予土居": [33.9547, 133.4287], "関川": [33.9450, 133.3700], "多喜浜": [33.9430, 133.3250], "新居浜": [33.9406, 133.2847], "中萩": [33.9220, 133.2350], "伊予西条": [33.9135, 133.1906], "石鎚山": [33.8960, 133.1550], "伊予氷見": [33.8920, 133.1350], "伊予小松": [33.8900, 133.1180], "玉之江": [33.8940, 133.0800], "壬生川": [33.9038, 133.0560], "伊予三芳": [33.9180, 133.0180], "伊予桜井": [33.9920, 133.0250], "伊予富田": [34.0320, 133.0150], "今治": [34.0645, 132.9934], "波止浜": [34.0880, 132.9650], "波方": [34.1020, 132.9450], "大西": [34.0680, 132.9250], "伊予亀岡": [34.0380, 132.8950], "菊間": [34.0050, 132.8550], "浅海": [33.9820, 132.8250], "大浦": [33.9650, 132.8050], "伊予北条": [33.9318, 132.7788], "柳原": [33.9180, 132.7680], "粟井": [33.9050, 132.7550], "光洋台": [33.8920, 132.7420], "堀江": [33.8820, 132.7350], "三津浜": [33.8550, 132.7250], "松山": [33.8401, 132.7521],
+            // 土讃線
+            "金蔵寺": [34.2480, 133.7780], "善通寺": [34.2274, 133.7848], "琴平": [34.1895, 133.8211], "塩入": [34.1480, 133.8450], "黒川": [34.1250, 133.8350], "猪ノ鼻トンネル": [34.0950, 133.8320], "讃岐財田": [34.0850, 133.8250], "坪尻": [34.0530, 133.8150], "箸蔵": [34.0350, 133.8250], "阿波池田": [34.0289, 133.8055], "三縄": [33.9950, 133.7950], "祖谷口": [33.9550, 133.7850], "阿波川口": [33.9350, 133.7750], "小歩危": [33.9150, 133.7650], "大歩危": [33.8943, 133.7656], "土佐岩原": [33.8350, 133.7450], "豊永": [33.8050, 133.7250], "大杉": [33.7483, 133.6669], "土佐穴内": [33.7150, 133.6550], "角茂谷": [33.6850, 133.6550], "繁藤": [33.6650, 133.6650], "新改": [33.6350, 133.6750], "土佐山田": [33.6062, 133.6766], "山田西町": [33.5980, 133.6650], "土佐長岡": [33.5850, 133.6550], "後免": [33.5783, 133.6441], "大津": [33.5680, 133.6150], "布師田": [33.5670, 133.5950], "土佐一宮": [33.5670, 133.5750], "薊野": [33.5670, 133.5580], "高知": [33.5670, 133.5435]
+        };
+
+        const ROUTES = {
+            "yosan": ["岡山", "大元", "備前西市", "茶屋町", "児島", "瀬戸大橋中間", "宇多津", "丸亀", "讃岐塩屋", "多度津", "海岸寺", "津島ノ宮", "詫間", "みの", "高瀬", "比地大", "本山", "観音寺", "豊浜", "箕浦", "川之江", "伊予三島", "伊予寒川", "赤星", "伊予土居", "関川", "多喜浜", "新居浜", "中萩", "伊予西条", "石鎚山", "伊予氷見", "伊予小松", "玉之江", "壬生川", "伊予三芳", "伊予桜井", "伊予富田", "今治", "波止浜", "波方", "大西", "伊予亀岡", "菊間", "浅海", "大浦", "伊予北条", "柳原", "粟井", "光洋台", "堀江", "三津浜", "松山"],
+            "dosan": ["岡山", "大元", "備前西市", "茶屋町", "児島", "瀬戸大橋中間", "宇多津", "多度津", "金蔵寺", "善通寺", "琴平", "塩入", "黒川", "猪ノ鼻トンネル", "讃岐財田", "坪尻", "箸蔵", "阿波池田", "三縄", "祖谷口", "阿波川口", "小歩危", "大歩危", "土佐岩原", "豊永", "大杉", "土佐穴内", "角茂谷", "繁藤", "新改", "土佐山田", "山田西町", "土佐長岡", "後免", "大津", "布師田", "土佐一宮", "薊野", "高知"],
+            "takamatsu": ["高松", "香西", "端岡", "坂出", "宇多津"]
+        };
+
+        // 時刻表データ（空で初期化し、非同期で読み込む）
+        let TRAIN_SCHEDULES = [];
+
+        // 非同期で時刻表データを取得する関数
+        async function loadTrainSchedules() {
+            try {
+                // 実際の実装では fetch('path/to/schedules.json') を使用します
+                // ここではデモ用に setTimeout で擬似的なネットワーク遅延を再現します
+                const mockJsonResponse =fetch('schedules.json');
+                // [
+                //    { id: "shiokaze-9", name: "しおかぜ9号", routeId: "yosan", stops: [{ name: "岡山", time: "10:35" }, { name: "児島", time: "10:55" }, { name: "宇多津", time: "11:15" }, { name: "多度津", time: "11:21" }, { name: "観音寺", time: "11:39" }, { name: "新居浜", time: "12:08" }, { name: "伊予西条", time: "12:16" }, { name: "今治", time: "12:41" }, { name: "松山", time: "13:13" }], icon: "😊" },
+                //    { id: "nanpu-7", name: "南風7号", routeId: "dosan", stops: [{ name: "岡山", time: "11:05" }, { name: "児島", time: "11:26" }, { name: "多度津", time: "11:47" }, { name: "善通寺", time: "11:51" }, { name: "琴平", time: "11:57" }, { name: "阿波池田", time: "12:32" }, { name: "大歩危", time: "12:51" }, { name: "高知", time: "13:41" }], icon: "🤠" },
+                //    { id: "shiokaze-10", name: "しおかぜ10号", routeId: "yosan", stops: [{ name: "松山", time: "09:15" }, { name: "今治", time: "09:47" }, { name: "伊予西西条", time: "10:14" }, { name: "新居浜", time: "10:22" }, { name: "観音寺", time: "10:50" }, { name: "多度津", time: "11:08" }, { name: "児島", time: "11:32" }, { name: "岡山", time: "11:52" }], icon: "🍙" },
+                //    { id: "nanpu-14", name: "南風14号", routeId: "dosan", stops: [{ name: "高知", time: "13:13" }, { name: "土佐山田", time: "13:25" }, { name: "阿波池田", time: "14:21" }, { name: "琴平", time: "14:52" }, { name: "多度津", time: "15:02" }, { name: "児島", time: "15:23" }, { name: "岡山", time: "15:43" }], icon: "🍛" }
+                //];
+
+                await new Promise(resolve => setTimeout(resolve, 800)); // 読み込み時間の演出
+                TRAIN_SCHEDULES = mockJsonResponse;
+                
+                // データ読み込み後にUIとマーカーを初期化
+                initNodes();
+                updateRouteLines();
+                setInterval(updateTrains, 1000);
+                updateTrains();
+            } catch (error) {
+                console.error("データの読み込みに失敗しました:", error);
+                document.getElementById('train-list').innerHTML = `<div class="col-span-full text-center text-red-500">時刻表データの取得に失敗しました。</div>`;
+            }
+        }
+
+        const map = L.map('map', { zoomSnap: 0.5 }).setView([34.0, 133.5], 8.5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
+
+        const routeLines = {};
+        const nodeMarkers = {};
+        const trainMarkers = {};
+
+        function updateRouteLines() {
+            Object.values(routeLines).forEach(line => map.removeLayer(line));
+            const drawPath = (routeId, color) => {
+                const latlngs = ROUTES[routeId].map(name => POINTS[name]);
+                routeLines[routeId] = L.polyline(latlngs, { color: color, weight: 3, opacity: 0.4 }).addTo(map);
+            };
+            drawPath("yosan", '#3b82f6');
+            drawPath("dosan", '#f97316');
+            drawPath("takamatsu", '#10b981');
+        }
+
+        function initNodes() {
+            const allStopsInSchedules = new Set();
+            TRAIN_SCHEDULES.forEach(t => t.stops.forEach(s => allStopsInSchedules.add(s.name)));
+
+            Object.keys(POINTS).forEach(name => {
+                const isMajorStation = allStopsInSchedules.has(name);
+                const isPoint = name.includes("中間") || name.includes("トンネル");
+                
+                const nodeIcon = L.divIcon({
+                    className: `node-icon ${isMajorStation ? 'station-label' : ''}`,
+                    html: `<div>${isPoint ? '・' : name}</div>`,
+                    iconSize: [isMajorStation ? 50 : 35, 14],
+                    iconAnchor: [isMajorStation ? 25 : 17, 7]
+                });
+
+                const marker = L.marker(POINTS[name], {
+                    icon: nodeIcon,
+                    draggable: true,
+                    opacity: isMajorStation ? 1 : 0.6,
+                    zIndexOffset: isMajorStation ? 500 : 0
+                }).addTo(map);
+
+                marker.on('drag', (e) => {
+                    const newPos = e.target.getLatLng();
+                    POINTS[name] = [newPos.lat, newPos.lng];
+                    updateRouteLines();
+                });
+                nodeMarkers[name] = marker;
+            });
+        }
+
+        function timeToMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function interpolate(pos1, pos2, ratio) {
+            return [pos1[0] + (pos2[0] - pos1[0]) * ratio, pos1[1] + (pos2[1] - pos1[1]) * ratio];
+        }
+
+        function getDetailedPath(fromStation, toStation, fullRouteId) {
+            const route = ROUTES[fullRouteId];
+            if (!route) return [POINTS[fromStation], POINTS[toStation]];
+            let fromIdx = route.indexOf(fromStation);
+            let toIdx = route.indexOf(toStation);
+            
+            if (fromIdx === -1 || toIdx === -1) {
+                if (fromStation === "岡山" && toStation === "児島") return [POINTS["岡山"], POINTS["大元"], POINTS["備前西市"], POINTS["茶屋町"], POINTS["児島"]];
+                return [POINTS[fromStation], POINTS[toStation]];
+            }
+
+            const path = [];
+            const step = fromIdx < toIdx ? 1 : -1;
+            for (let i = fromIdx; i !== toIdx + step; i += step) {
+                path.push(POINTS[route[i]]);
+            }
+            return path;
+        }
+
+        function updateTrains() {
+            const now = new Date();
+            const currentTotalMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+            document.getElementById('current-clock').innerText = now.toLocaleTimeString('ja-JP', { hour12: false });
+
+            const trainListContainer = document.getElementById('train-list');
+            let listHtml = "";
+
+            TRAIN_SCHEDULES.forEach(train => {
+                const startTime = timeToMinutes(train.stops[0].time);
+                const endTime = timeToMinutes(train.stops[train.stops.length - 1].time);
+                let currentPos = null;
+                let status = "待機中";
+
+                if (currentTotalMinutes < startTime) {
+                    status = `${train.stops[0].time}発 待機中`;
+                    currentPos = POINTS[train.stops[0].name];
+                } else if (currentTotalMinutes > endTime) {
+                    status = `終着到着`;
+                    currentPos = POINTS[train.stops[train.stops.length - 1].name];
+                } else {
+                    for (let i = 0; i < train.stops.length - 1; i++) {
+                        const s1 = train.stops[i];
+                        const s2 = train.stops[i + 1];
+                        const t1 = timeToMinutes(s1.time);
+                        const t2 = timeToMinutes(s2.time);
+
+                        if (currentTotalMinutes >= t1 && currentTotalMinutes <= t2) {
+                            const ratio = (currentTotalMinutes - t1) / (t2 - t1);
+                            const path = getDetailedPath(s1.name, s2.name, train.routeId);
+                            const segmentCount = path.length - 1;
+                            const segmentIndex = Math.min(Math.floor(ratio * segmentCount), segmentCount - 1);
+                            const segmentRatio = (ratio * segmentCount) - segmentIndex;
+                            currentPos = interpolate(path[segmentIndex], path[segmentIndex + 1], segmentRatio);
+                            status = `${s1.name} ➔ ${s2.name}`;
+                            break;
+                        }
+                    }
+                }
+
+                if (currentPos) {
+                    if (!trainMarkers[train.id]) {
+                        const icon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div class="train-icon" style="width:36px; height:36px;">${train.icon}</div>`,
+                            iconSize: [36, 36],
+                            iconAnchor: [18, 18]
+                        });
+                        trainMarkers[train.id] = L.marker(currentPos, { icon: icon }).addTo(map);
+                    } else {
+                        trainMarkers[train.id].setLatLng(currentPos);
+                    }
+                    trainMarkers[train.id].bindPopup(`<b>${train.name}</b><br>${status}`);
+                }
+
+                const isActive = currentTotalMinutes >= startTime && currentTotalMinutes <= endTime;
+                listHtml += `<div class="bg-white p-2 rounded shadow-sm border-l-4 ${isActive ? 'border-green-500' : 'border-gray-200'}">
+                    <div class="flex items-center gap-2"><span>${train.icon}</span><h3 class="font-bold text-xs">${train.name}</h3></div>
+                    <p class="text-[10px] text-blue-600 font-bold">${status}</p>
+                </div>`;
+            });
+            trainListContainer.innerHTML = listHtml;
+        }
+
+        function exportPoints() {
+            console.log(JSON.stringify(POINTS, null, 4));
+            alert("座標データをコンソールに出力しました。");
+        }
+
+        // 起動時にデータを読み込む
+        loadTrainSchedules();
+
+    </script>
+</body>
+</html>
