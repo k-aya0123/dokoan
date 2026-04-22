@@ -52,13 +52,13 @@
     <header class="bg-red-500 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
             <h1 class="text-xl font-bold flex items-center gap-2">
-                <span>🚂</span> アンパンマン列車なう
+                <span>🚂</span> アンパンマン列車なう β版
             </h1>
             <div class="flex items-center gap-2">
                 <!-- リセット機能ボタン -->
-                <button onclick="resetPoints()" class="bg-red-700 text-white px-3 py-1 rounded font-bold text-sm hover:bg-red-800 transition-colors">座標をリセット</button>
+                <button onclick="resetPoints()" class="bg-red-700 text-white px-3 py-1 rounded font-bold text-sm hover:bg-red-800 transition-colors">駅の座標をリセット</button>
                 <!-- 調整した座標をJSONでダウンロードする機能 -->
-                <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100 transition-colors">座標を保存</button>
+                <!-- <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100 transition-colors">座標を保存</button> -->
                 <!-- 現在時刻を表示するデジタル時計 -->
                 <div id="current-clock" class="text-lg font-mono bg-red-600 px-3 py-1 rounded ml-2">00:00:00</div>
             </div>
@@ -84,7 +84,9 @@
         <!-- アプリのステータスや注釈を表示するフッター的なエリア -->
         <div class="bg-white border-l-4 border-blue-400 p-4 text-xs text-gray-600 shadow-sm">
             <p class="font-bold mb-1">システム情報:</p>
-            <p>外部の <code>schedules.json</code> から時刻表を読み込んでいます。位置計算は停車駅間の「通過駅」を含めた線形補間によって行われています。</p>
+            <p>2026年4月22日時点の時刻表に基づいた運行予定です。運休には非対応です。</p>
+            <p>列車の位置は、停車駅間の「通過駅」を含めた線形補間で計算した擬似的な位置です。実際の位置とは誤差があります。</p>
+            <p>「あかいアンパンマン列車」と「きいろいアンパンマン列車」は区別しません。</p>
         </div>
     </main>
 
