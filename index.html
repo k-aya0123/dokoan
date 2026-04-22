@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>アンパンマン列車なう - 外部JSON連携版</title>
-    <!-- Leaflet CSS -->
+    <title>アンパンマン列車なう - 詳細解説付</title>
+    <!-- 地図ライブラリ Leaflet の読み込み -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- デザイン用フレームワーク Tailwind CSS の読み込み -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* 地図の高さと角丸の設定 */
         #map { height: 65vh; width: 100%; border-radius: 12px; }
+        
+        /* 列車アイコンのスタイル: 円形の白枠に絵文字を表示 */
         .train-icon {
             display: flex;
             align-items: center;
@@ -20,6 +24,8 @@
             font-size: 20px;
             z-index: 1000 !important;
         }
+
+        /* 汎用的な駅・地点ラベルのスタイル */
         .node-icon {
             background: rgba(255, 255, 255, 0.8);
             border: 1px solid #ccc;
@@ -30,6 +36,8 @@
             white-space: nowrap;
             color: #666;
         }
+
+        /* 特急停車駅（主要駅）を強調するスタイル */
         .station-label {
             font-weight: bold;
             color: #333;
@@ -40,108 +48,110 @@
 </head>
 <body class="bg-orange-50 font-sans text-gray-800">
 
+    <!-- ヘッダーセクション -->
     <header class="bg-red-500 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
             <h1 class="text-xl font-bold flex items-center gap-2">
-                <span>🚂</span> アンパンマン列車なう (外部JSON連携版)
+                <span>🚂</span> アンパンマン列車なう
             </h1>
             <div class="flex items-center gap-4">
-                <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100">座標を書き出し</button>
+                <!-- 調整した座標をJSONでダウンロードする機能 -->
+                <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100">座標を保存</button>
+                <!-- 現在時刻を表示するデジタル時計 -->
                 <div id="current-clock" class="text-lg font-mono bg-red-600 px-3 py-1 rounded">00:00:00</div>
             </div>
         </div>
     </header>
 
     <main class="container mx-auto p-4 space-y-4">
+        <!-- 地図表示エリア -->
         <div class="bg-white p-2 rounded-xl shadow-md relative">
             <div id="map"></div>
+            <!-- 地図上の凡例（オーバーレイ） -->
             <div class="absolute top-4 right-4 z-[1000] bg-white p-2 rounded shadow text-xs opacity-95">
                 <p>📍 特急停車駅（太枠）と通過駅を表示しています</p>
                 <p>📍 線路をドラッグして微調整可能です</p>
             </div>
         </div>
 
+        <!-- 稼働中の列車情報カードが表示されるグリッドエリア -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="train-list">
             <div class="col-span-full text-center py-10 text-gray-400 italic">時刻表データを読み込み中...</div>
         </div>
 
+        <!-- アプリのステータスや注釈を表示するフッター的なエリア -->
         <div class="bg-white border-l-4 border-blue-400 p-4 text-xs text-gray-600 shadow-sm">
-            <p class="font-bold mb-1">JSONデータの形式について:</p>
-            <p>このアプリは同一ディレクトリ内の <code>schedules.json</code> を読み込みます。ファイルが見つからない場合はエラーが表示されます。</p>
+            <p class="font-bold mb-1">システム情報:</p>
+            <p>外部の <code>schedules.json</code> から時刻表を読み込んでいます。位置計算は停車駅間の「通過駅」を含めた線形補間によって行われています。</p>
         </div>
     </main>
 
+    <!-- Leaflet JS の読み込み -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // --- 座標データ定義 ---
+        /**
+         * 1. 座標データ（POINTS）
+         * 各駅名（または中間点）に対応する緯度・経度を格納。
+         * 通過駅も網羅することで、特急がカーブや地形に合わせて動くようになります。
+         */
         let POINTS = {
-            // 岡山・瀬戸大橋線
             "岡山": [34.6662, 133.9185], "大元": [34.6493, 133.9067], "備前西市": [34.6294, 133.8943], "茶屋町": [34.5579, 133.8208], "児島": [34.4646, 133.8184], "瀬戸大橋中間": [34.3852, 133.8277],
-            // 予讃線（東側）
             "高松": [34.3503, 134.0465], "香西": [34.3411, 134.0150], "端岡": [34.3168, 133.9610], "坂出": [34.3135, 133.8580], "宇多津": [34.3116, 133.8202], "丸亀": [34.3013, 133.7941], "讃岐塩屋": [34.2930, 133.7780], "多度津": [34.2758, 133.7601],
-            // 予讃線（西側）
             "海岸寺": [34.2562, 133.7230], "津島ノ宮": [34.2410, 133.7160], "詫間": [34.2251, 133.7145], "みの": [34.2050, 133.7080], "高瀬": [34.1873, 133.7027], "比地大": [34.1680, 133.6890], "本山": [34.1480, 133.6780], "観音寺": [34.1293, 133.6534], "豊浜": [34.0840, 133.6420], "箕浦": [34.0530, 133.6180], "川之江": [34.0152, 133.5786], "伊予三島": [33.9806, 133.5434], "伊予寒川": [33.9650, 133.5000], "赤星": [33.9600, 133.4700], "伊予土居": [33.9547, 133.4287], "関川": [33.9450, 133.3700], "多喜浜": [33.9430, 133.3250], "新居浜": [33.9406, 133.2847], "中萩": [33.9220, 133.2350], "伊予西条": [33.9135, 133.1906], "石鎚山": [33.8960, 133.1550], "伊予氷見": [33.8920, 133.1350], "伊予小松": [33.8900, 133.1180], "玉之江": [33.8940, 133.0800], "壬生川": [33.9038, 133.0560], "伊予三芳": [33.9180, 133.0180], "伊予桜井": [33.9920, 133.0250], "伊予富田": [34.0320, 133.0150], "今治": [34.0645, 132.9934], "波止浜": [34.0880, 132.9650], "波方": [34.1020, 132.9450], "大西": [34.0680, 132.9250], "伊予亀岡": [34.0380, 132.8950], "菊間": [34.0050, 132.8550], "浅海": [33.9820, 132.8250], "大浦": [33.9650, 132.8050], "伊予北条": [33.9318, 132.7788], "柳原": [33.9180, 132.7680], "粟井": [33.9050, 132.7550], "光洋台": [33.8920, 132.7420], "堀江": [33.8820, 132.7350], "三津浜": [33.8550, 132.7250], "松山": [33.8401, 132.7521],
-            // 土讃線
             "金蔵寺": [34.2480, 133.7780], "善通寺": [34.2274, 133.7848], "琴平": [34.1895, 133.8211], "塩入": [34.1480, 133.8450], "黒川": [34.1250, 133.8350], "猪ノ鼻トンネル": [34.0950, 133.8320], "讃岐財田": [34.0850, 133.8250], "坪尻": [34.0530, 133.8150], "箸蔵": [34.0350, 133.8250], "阿波池田": [34.0289, 133.8055], "三縄": [33.9950, 133.7950], "祖谷口": [33.9550, 133.7850], "阿波川口": [33.9350, 133.7750], "小歩危": [33.9150, 133.7650], "大歩危": [33.8943, 133.7656], "土佐岩原": [33.8350, 133.7450], "豊永": [33.8050, 133.7250], "大杉": [33.7483, 133.6669], "土佐穴内": [33.7150, 133.6550], "角茂谷": [33.6850, 133.6550], "繁藤": [33.6650, 133.6650], "新改": [33.6350, 133.6750], "土佐山田": [33.6062, 133.6766], "山田西町": [33.5980, 133.6650], "土佐長岡": [33.5850, 133.6550], "後免": [33.5783, 133.6441], "大津": [33.5680, 133.6150], "布師田": [33.5670, 133.5950], "土佐一宮": [33.5670, 133.5750], "薊野": [33.5670, 133.5580], "高知": [33.5670, 133.5435]
         };
 
+        /**
+         * 2. 路線データ（ROUTES）
+         * 駅の並び順を定義。
+         * 列車はこのリストに沿って「次の点」を探し、滑らかに移動します。
+         */
         const ROUTES = {
             "yosan": ["岡山", "大元", "備前西市", "茶屋町", "児島", "瀬戸大橋中間", "宇多津", "丸亀", "讃岐塩屋", "多度津", "海岸寺", "津島ノ宮", "詫間", "みの", "高瀬", "比地大", "本山", "観音寺", "豊浜", "箕浦", "川之江", "伊予三島", "伊予寒川", "赤星", "伊予土居", "関川", "多喜浜", "新居浜", "中萩", "伊予西条", "石鎚山", "伊予氷見", "伊予小松", "玉之江", "壬生川", "伊予三芳", "伊予桜井", "伊予富田", "今治", "波止浜", "波方", "大西", "伊予亀岡", "菊間", "浅海", "大浦", "伊予北条", "柳原", "粟井", "光洋台", "堀江", "三津浜", "松山"],
             "dosan": ["岡山", "大元", "備前西市", "茶屋町", "児島", "瀬戸大橋中間", "宇多津", "多度津", "金蔵寺", "善通寺", "琴平", "塩入", "黒川", "猪ノ鼻トンネル", "讃岐財田", "坪尻", "箸蔵", "阿波池田", "三縄", "祖谷口", "阿波川口", "小歩危", "大歩危", "土佐岩原", "豊永", "大杉", "土佐穴内", "角茂谷", "繁藤", "新改", "土佐山田", "山田西町", "土佐長岡", "後免", "大津", "布師田", "土佐一宮", "薊野", "高知"],
             "takamatsu": ["高松", "香西", "端岡", "坂出", "宇多津"]
         };
 
-        // 時刻表データ（JSONから読み込む）
-        let TRAIN_SCHEDULES = [];
+        // グローバル変数
+        let TRAIN_SCHEDULES = []; // JSONから読み込んだ時刻表を格納
+        const map = L.map('map', { zoomSnap: 0.5 }).setView([34.0, 133.5], 8.5); // 地図初期化
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
 
-        // 外部JSONファイルを読み込む関数
+        const routeLines = {};   // 路線描画用レイヤー
+        const nodeMarkers = {};  // 駅マーカー
+        const trainMarkers = {}; // 列車マーカー
+
+        /**
+         * 3. 外部JSONデータの読み込み関数
+         */
         async function loadTrainSchedules() {
-            const JSON_URL = 'schedules.json'; // 読み込むファイル名
+            const JSON_URL = 'schedules.json'; 
             const listContainer = document.getElementById('train-list');
 
             try {
                 const response = await fetch(JSON_URL);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTPエラー: ${response.status} - ファイルが見つからないかアクセスできません。`);
-                }
-
+                if (!response.ok) throw new Error(`HTTPエラー: ${response.status}`);
                 const data = await response.json();
                 
-                // データの整合性チェック（簡易的）
-                if (!Array.isArray(data)) {
-                    throw new Error("JSON形式が正しくありません（配列である必要があります）。");
-                }
-
                 TRAIN_SCHEDULES = data;
                 
-                // 読み込み成功後の初期化
+                // データ取得後に地図の描画と列車の更新ループを開始
                 initNodes();
                 updateRouteLines();
-                setInterval(updateTrains, 1000);
+                setInterval(updateTrains, 1000); // 1秒ごとに列車の位置を再計算
                 updateTrains();
-
             } catch (error) {
-                console.error("時刻表の読み込みエラー:", error);
-                listContainer.innerHTML = `
-                    <div class="col-span-full text-center py-10 bg-white rounded-lg shadow-inner">
-                        <p class="text-red-500 font-bold mb-2">⚠️ データ読み込みエラー</p>
-                        <p class="text-xs text-gray-500">${error.message}</p>
-                        <p class="text-[10px] mt-4 text-gray-400">※ローカル環境(file://)ではブラウザの制限でfetchできない場合があります。<br>サーバー経由で実行するか、VSCodeのLive Server等を使用してください。</p>
-                        <button onclick="location.reload()" class="mt-4 bg-red-100 text-red-600 px-4 py-1 rounded-full text-xs hover:bg-red-200">再試行</button>
-                    </div>
-                `;
+                console.error("読み込みエラー:", error);
+                listContainer.innerHTML = `<div class="col-span-full text-center py-10 bg-white rounded shadow text-red-500">データ読み込みに失敗しました。<br>${error.message}</div>`;
             }
         }
 
-        const map = L.map('map', { zoomSnap: 0.5 }).setView([34.0, 133.5], 8.5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
-
-        const routeLines = {};
-        const nodeMarkers = {};
-        const trainMarkers = {};
-
+        /**
+         * 4. 路線図の描画
+         * ROUTESの定義に基づき、POINTSを結ぶポリラインを地図上に引く。
+         */
         function updateRouteLines() {
+            // 既存の線を削除して再描画（駅ドラッグ時の更新用）
             Object.values(routeLines).forEach(line => map.removeLayer(line));
             const drawPath = (routeId, color) => {
                 const latlngs = ROUTES[routeId].map(name => POINTS[name]);
@@ -152,7 +162,13 @@
             drawPath("takamatsu", '#10b981');
         }
 
+        /**
+         * 5. 駅マーカーの設置
+         * POINTSの全ての場所に駅名ラベル（マーカー）を置く。
+         * ドラッグ機能を有効にしており、移動させると路線の形も追従する。
+         */
         function initNodes() {
+            // 時刻表に存在する駅（主要駅）を特定
             const allStopsInSchedules = new Set();
             TRAIN_SCHEDULES.forEach(t => t.stops.forEach(s => allStopsInSchedules.add(s.name)));
 
@@ -174,6 +190,7 @@
                     zIndexOffset: isMajorStation ? 500 : 0
                 }).addTo(map);
 
+                // ドラッグイベント: 座標リストを更新し、路線図を再描画
                 marker.on('drag', (e) => {
                     const newPos = e.target.getLatLng();
                     POINTS[name] = [newPos.lat, newPos.lng];
@@ -183,34 +200,46 @@
             });
         }
 
+        // 時刻文字列 "HH:MM" をその日の開始からの「分数（小数込）」に変換する
         function timeToMinutes(timeStr) {
             const [h, m] = timeStr.split(':').map(Number);
             return h * 60 + m;
         }
 
+        // 2点間の位置を比率(ratio: 0.0~1.0)に基づいて補間計算する
         function interpolate(pos1, pos2, ratio) {
             return [pos1[0] + (pos2[0] - pos1[0]) * ratio, pos1[1] + (pos2[1] - pos1[1]) * ratio];
         }
 
+        /**
+         * 6. 通過駅を含めた経路補完
+         * 特急停車駅 A と B の間の移動について、ROUTES 内にある「通過駅」の座標を全て取得する。
+         */
         function getDetailedPath(fromStation, toStation, fullRouteId) {
             const route = ROUTES[fullRouteId];
             if (!route) return [POINTS[fromStation], POINTS[toStation]];
             let fromIdx = route.indexOf(fromStation);
             let toIdx = route.indexOf(toStation);
             
+            // ルート上に駅が見つからない場合のフォールバック
             if (fromIdx === -1 || toIdx === -1) {
+                // 特殊な接続（短絡線など）の補完
                 if (fromStation === "岡山" && toStation === "児島") return [POINTS["岡山"], POINTS["大元"], POINTS["備前西市"], POINTS["茶屋町"], POINTS["児島"]];
                 return [POINTS[fromStation], POINTS[toStation]];
             }
 
             const path = [];
-            const step = fromIdx < toIdx ? 1 : -1;
+            const step = fromIdx < toIdx ? 1 : -1; // 上り下り判定
             for (let i = fromIdx; i !== toIdx + step; i += step) {
                 path.push(POINTS[route[i]]);
             }
             return path;
         }
 
+        /**
+         * 7. メインループ: 列車の位置更新
+         * 現在時刻を取得し、全列車の運行状況を1秒ごとに計算・描画。
+         */
         function updateTrains() {
             const now = new Date();
             const currentTotalMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
@@ -226,12 +255,15 @@
                 let status = "待機中";
 
                 if (currentTotalMinutes < startTime) {
+                    // 運行前
                     status = `${train.stops[0].time}発 待機中`;
                     currentPos = POINTS[train.stops[0].name];
                 } else if (currentTotalMinutes > endTime) {
+                    // 運行終了
                     status = `終着到着`;
                     currentPos = POINTS[train.stops[train.stops.length - 1].name];
                 } else {
+                    // 運行中: 現在どの駅間にいるかを特定
                     for (let i = 0; i < train.stops.length - 1; i++) {
                         const s1 = train.stops[i];
                         const s2 = train.stops[i + 1];
@@ -239,18 +271,22 @@
                         const t2 = timeToMinutes(s2.time);
 
                         if (currentTotalMinutes >= t1 && currentTotalMinutes <= t2) {
-                            const ratio = (currentTotalMinutes - t1) / (t2 - t1);
+                            const ratio = (currentTotalMinutes - t1) / (t2 - t1); // 駅間の進捗率
                             const path = getDetailedPath(s1.name, s2.name, train.routeId);
+                            
+                            // 経路上の複数の点（通過駅）の中から、現在位置を更に細かく補間
                             const segmentCount = path.length - 1;
                             const segmentIndex = Math.min(Math.floor(ratio * segmentCount), segmentCount - 1);
                             const segmentRatio = (ratio * segmentCount) - segmentIndex;
                             currentPos = interpolate(path[segmentIndex], path[segmentIndex + 1], segmentRatio);
+                            
                             status = `${s1.name} ➔ ${s2.name}`;
                             break;
                         }
                     }
                 }
 
+                // 地図上のマーカー更新
                 if (currentPos) {
                     if (!trainMarkers[train.id]) {
                         const icon = L.divIcon({
@@ -266,6 +302,7 @@
                     trainMarkers[train.id].bindPopup(`<b>${train.name}</b><br>${status}`);
                 }
 
+                // UIリストへの表示追加
                 const isActive = currentTotalMinutes >= startTime && currentTotalMinutes <= endTime;
                 listHtml += `<div class="bg-white p-2 rounded shadow-sm border-l-4 ${isActive ? 'border-green-500' : 'border-gray-200'}">
                     <div class="flex items-center gap-2"><span>${train.icon}</span><h3 class="font-bold text-xs">${train.name}</h3></div>
@@ -275,6 +312,10 @@
             trainListContainer.innerHTML = listHtml;
         }
 
+        /**
+         * 8. 座標出力機能
+         * 地図上の駅を移動させた後、その結果をJSONファイルとして保存。
+         */
         function exportPoints() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(POINTS, null, 4));
             const downloadAnchorNode = document.createElement('a');
@@ -285,7 +326,7 @@
             downloadAnchorNode.remove();
         }
 
-        // ページロード時にJSONデータを読み込む
+        // アプリ起動
         window.onload = loadTrainSchedules;
 
     </script>
