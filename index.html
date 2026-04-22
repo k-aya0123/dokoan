@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>アンパンマン列車なう - 詳細解説付</title>
+    <title>どこゆく!アンパンマン列車 - 詳細解説付</title>
     <!-- 地図ライブラリ Leaflet の読み込み -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- デザイン用フレームワーク Tailwind CSS の読み込み -->
@@ -52,13 +52,13 @@
     <header class="bg-red-500 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
             <h1 class="text-xl font-bold flex items-center gap-2">
-                <span>🚂</span> アンパンマン列車なう β版
+                <span>🚂</span> どこゆく!アンパンマン列車 β版
             </h1>
             <div class="flex items-center gap-2">
                 <!-- リセット機能ボタン -->
                 <button onclick="resetPoints()" class="bg-red-700 text-white px-3 py-1 rounded font-bold text-sm hover:bg-red-800 transition-colors">駅の座標をリセット</button>
                 <!-- 調整した座標をJSONでダウンロードする機能 -->
-                <!-- <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100 transition-colors">座標を保存</button> -->
+                <button onclick="exportPoints()" class="bg-white text-red-500 px-3 py-1 rounded font-bold text-sm hover:bg-orange-100 transition-colors">座標を保存</button>
                 <!-- 現在時刻を表示するデジタル時計 -->
                 <div id="current-clock" class="text-lg font-mono bg-red-600 px-3 py-1 rounded ml-2">00:00:00</div>
             </div>
