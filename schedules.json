@@ -1,22 +1,5 @@
 ﻿[
     {
-        "id": "shiokaze-9",
-        "name": "しおかぜ9号",
-        "routeId": "yosan",
-        "icon": "😊",
-        "stops": [
-            { "name": "岡山", "time": "10:35" },
-            { "name": "児島", "time": "10:55" },
-            { "name": "宇多津", "time": "11:15" },
-            { "name": "多度津", "time": "11:21" },
-            { "name": "観音寺", "time": "11:39" },
-            { "name": "新居浜", "time": "12:08" },
-            { "name": "伊予西条", "time": "12:16" },
-            { "name": "今治", "time": "12:41" },
-            { "name": "松山", "time": "13:13" }
-        ]
-    },
-    {
         "id": "nanpu-2",
         "name": "南風2号",
         "routeId": "dosan",
