@@ -22,7 +22,6 @@
             border-radius: 50%;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             font-size: 20px;
-            z-index: 1000 !important;
         }
 
         /* 汎用的な駅・地点ラベルのスタイル */
@@ -43,6 +42,13 @@
             color: #333;
             border-color: #999;
             background: rgba(255, 255, 255, 1);
+        }
+
+        /* タブのアクティブスタイル */
+        .tab-active {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -77,8 +83,16 @@
             </div>
         </div>
 
+        <!-- 路線切り替えタブ -->
+        <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <button onclick="setFilter('all')" id="tab-all" class="tab-active px-4 py-2 rounded-full text-xs bg-white shadow-sm border border-gray-200 transition-all whitespace-nowrap">すべて</button>
+            <button onclick="setFilter('yosan')" id="tab-yosan" class="px-4 py-2 rounded-full text-xs bg-white shadow-sm border border-gray-200 transition-all whitespace-nowrap">予讃線</button>
+            <button onclick="setFilter('dosan')" id="tab-dosan" class="px-4 py-2 rounded-full text-xs bg-white shadow-sm border border-gray-200 transition-all whitespace-nowrap">土讃線</button>
+        </div>
+
         <!-- 稼働中の列車情報カードが表示されるグリッドエリア -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="train-list">
+        <!-- <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="train-list"> -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2" id="train-list">
             <div class="col-span-full text-center py-10 text-gray-400 italic">時刻表データを読み込み中...</div>
         </div>
 
@@ -122,6 +136,7 @@
 
         // グローバル変数
         let TRAIN_SCHEDULES = []; // JSONから読み込んだ時刻表を格納
+        let currentFilter = 'all'; // 現在の表示フィルタ
         const map = L.map('map', { zoomSnap: 0.5 }).setView([34.0, 133.5], 8.5); // 地図初期化
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
 
@@ -133,7 +148,7 @@
          * 3. 外部JSONデータの読み込み関数
          */
         async function loadTrainSchedules() {
-            const JSON_URL = 'schedules.json'; 
+            const JSON_URL = 'schedules_dosan.json'; 
             const JSON_URL_ST = 'station_points.json';
             const listContainer = document.getElementById('train-list');
 
@@ -162,6 +177,18 @@
                 console.error("読み込みエラー:", error);
                 listContainer.innerHTML = `<div class="col-span-full text-center py-10 bg-white rounded shadow text-red-500">データ読み込みに失敗しました。<br>${error.message}</div>`;
             }
+        }
+
+        // フィルタ設定
+        function setFilter(filter) {
+            currentFilter = filter;
+            // タブの見た目を更新
+            ['all', 'yosan', 'dosan'].forEach(f => {
+                const btn = document.getElementById(`tab-${f}`);
+                if (f === filter) btn.classList.add('tab-active');
+                else btn.classList.remove('tab-active');
+            });
+            updateTrains();
         }
 
         /**
@@ -302,6 +329,13 @@
             let listHtml = "";
 
             TRAIN_SCHEDULES.forEach(train => {
+                // フィルタリング処理
+                const isYosan = train.routeId === 'yosan' || train.routeId === 'takamatsu';
+                const isDosan = train.routeId === 'dosan';
+                
+                if (currentFilter === 'yosan' && !isYosan) return;
+                if (currentFilter === 'dosan' && !isDosan) return;
+
                 const startTime = timeToMinutes(train.stops[0].time);
                 const endTime = timeToMinutes(train.stops[train.stops.length - 1].time);
                 let currentPos = null;
@@ -348,7 +382,11 @@
                             iconSize: [36, 36],
                             iconAnchor: [18, 18]
                         });
-                        trainMarkers[train.id] = L.marker(currentPos, { icon: icon }).addTo(map);
+                        // zIndexOffset: 1000 を設定して駅名(最大500)より前面に表示
+                        trainMarkers[train.id] = L.marker(currentPos, { 
+                            icon: icon,
+                            zIndexOffset: 1000 
+                        }).addTo(map);
                     } else {
                         trainMarkers[train.id].setLatLng(currentPos);
                     }
@@ -364,6 +402,10 @@
                     <p class="text-[10px] text-blue-600 font-bold">${status}</p>
                 </div>`;
             });
+            
+            if (listHtml === "") {
+                listHtml = `<div class="col-span-full text-center py-10 text-gray-400 italic text-sm">対象の列車はありません</div>`;
+            }
             trainListContainer.innerHTML = listHtml;
         }
 
